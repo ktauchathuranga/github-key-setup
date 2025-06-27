@@ -107,13 +107,4 @@ github-key-setup/
 * Enables GPG commit signing in Git
 * Optionally copies your public key to clipboard
 
----
-
-## 📚 GitHub Instructions
-
-* **SSH Key**: [https://github.com/settings/keys](https://github.com/settings/keys) → *"New SSH Key"*
-* **GPG Key**: [https://github.com/settings/keys](https://github.com/settings/keys) → *"New GPG Key"*
-
----
-
 
