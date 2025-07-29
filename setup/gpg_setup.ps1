@@ -20,9 +20,9 @@ $comment = Read-Host "Enter a comment (optional)"
 $tempFile = "$env:TEMP\gpg-key-config.txt"
 Set-Content -Path $tempFile -Value @"
 %no-protection
-Key-Type: default
+Key-Type: RSA
 Key-Length: 4096
-Subkey-Type: default
+Subkey-Type: RSA
 Name-Real: $name
 Name-Email: $email
 Name-Comment: $comment

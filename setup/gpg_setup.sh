@@ -17,9 +17,9 @@ echo "Generating GPG key..."
 
 cat >key_config <<EOF
 %no-protection
-Key-Type: default
+Key-Type: RSA
 Key-Length: 4096
-Subkey-Type: default
+Subkey-Type: RSA
 Name-Real: $name
 Name-Email: $email
 Name-Comment: $comment
