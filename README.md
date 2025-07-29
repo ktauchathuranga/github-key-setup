@@ -72,6 +72,8 @@ make gpg      # Only GPG
 make all      # SSH + GPG
 ```
 
+if you get any `gpg` permission errors just do `chmod 700 ~/.gnupg`
+
 ### Windows:
 
 You can run individual setup scripts from the `setup/` directory:
@@ -106,5 +108,4 @@ github-key-setup/
 * Configures Git with your name/email
 * Enables GPG commit signing in Git
 * Optionally copies your public key to clipboard
-
 
