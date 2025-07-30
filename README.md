@@ -109,3 +109,4 @@ github-key-setup/
 * Enables GPG commit signing in Git
 * Optionally copies your public key to clipboard
 
+
