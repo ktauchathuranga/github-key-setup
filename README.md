@@ -109,4 +109,18 @@ github-key-setup/
 * Enables GPG commit signing in Git
 * Optionally copies your public key to clipboard
 
+## Aliases
+
+* `git co` - checkout
+* `git br` - branch
+* `git ci` - commit
+* `git st` - status
+* `git sw` - switch
+* `git lg` - log --online --decorate --all --graph
+* `git ps` - push origin HEAD
+* `git pl` - pull origin HEAD
+* `git ad` - add .
+* `git cm` - commit -m
+* `git unstage` - reset HEAD --
+* `git last` - log -1 HEAD
 
