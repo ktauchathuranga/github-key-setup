@@ -114,7 +114,7 @@ git config --global alias.ci commit
 git config --global alias.st status
 git config --global alias.sw switch # Alias for git switch
 git config --global alias.lg "log --oneline --decorate --all --graph" # A more detailed log alias
-git config --global alias.pu "push origin HEAD" # Push current branch to origin
+git config --global alias.ps "push origin HEAD" # Push current branch to origin
 git config --global alias.pl "pull origin HEAD" # Pull current branch from origin
 git config --global alias.ad "add ." # Stage all changes
 git config --global alias.cm "commit -m" # Commit with a message
