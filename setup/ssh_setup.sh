@@ -108,6 +108,19 @@ echo "Configuring Git..."
 git config --global user.name "$github_username"
 git config --global user.email "$email"
 git config --global init.defaultBranch main
+git config --global alias.co checkout
+git config --global alias.br branch
+git config --global alias.ci commit
+git config --global alias.st status
+git config --global alias.sw switch # Alias for git switch
+git config --global alias.lg "log --oneline --decorate --all --graph" # A more detailed log alias
+git config --global alias.pu "push origin HEAD" # Push current branch to origin
+git config --global alias.pl "pull origin HEAD" # Pull current branch from origin
+git config --global alias.ad "add ." # Stage all changes
+git config --global alias.cm "commit -m" # Commit with a message
+git config --global alias.unstage "reset HEAD --" # Unstage changes
+git config --global alias.last "log -1 HEAD" # Show the last commit
+
 
 # Set up Git to use SSH for GitHub
 git config --global url."git@github.com:".insteadOf "https://github.com/"
