@@ -157,6 +157,7 @@ Write-Host
 Write-Host "Configuring Git..." -ForegroundColor Yellow
 & git config --global user.name $githubUsername
 & git config --global user.email $email
+& git config --global init.defaultBranch main
 
 # Set up Git to use SSH for GitHub
 & git config --global url."git@github.com:".insteadOf "https://github.com/"

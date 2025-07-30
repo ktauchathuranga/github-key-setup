@@ -107,6 +107,7 @@ echo
 echo "Configuring Git..."
 git config --global user.name "$github_username"
 git config --global user.email "$email"
+git config --global init.defaultBranch main
 
 # Set up Git to use SSH for GitHub
 git config --global url."git@github.com:".insteadOf "https://github.com/"
