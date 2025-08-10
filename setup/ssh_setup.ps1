@@ -55,7 +55,10 @@ param(
     [switch]$Force,
     
     [Parameter(HelpMessage = "Run in non-interactive mode")]
-    [switch]$NonInteractive
+    [switch]$NonInteractive,
+    
+    [Parameter(HelpMessage = "Show help message")]
+    [switch]$Help
 )
 
 # Script configuration
@@ -71,7 +74,7 @@ $script:PublicKey = ""
 $script:SshConfig = ""
 
 #==============================================================================
-# Helper Functions
+# Helper Functions (MUST BE DEFINED FIRST)
 #==============================================================================
 
 function Write-ColorOutput {
@@ -148,18 +151,6 @@ function Show-Help {
     Write-Host "    Two different names are used:"
     Write-Host "    - GitHub Username: The unique identifier in your GitHub URL (github.com/username)"
     Write-Host "    - Full Name: Your actual name used for Git commit attribution (e.g., 'John Doe')"
-    Write-Host
-    Write-Header "TROUBLESHOOTING:"
-    Write-Host "    If SSH connection fails:"
-    Write-Host "    1. Verify the public key was added to GitHub correctly"
-    Write-Host "    2. Check your internet connection"
-    Write-Host "    3. Run: ssh -T git@github.com"
-    Write-Host "    4. Ensure SSH agent is running"
-    Write-Host
-    Write-Host "    If Git operations fail:"
-    Write-Host "    1. Verify Git is configured: git config --list"
-    Write-Host "    2. Test with: git clone git@github.com:octocat/Hello-World.git"
-    Write-Host "    3. Check SSH config: Get-Content ~/.ssh/config"
     Write-Host
 }
 
@@ -253,6 +244,30 @@ function Test-SshAgent {
 # User Input Functions
 #==============================================================================
 
+function Test-RequiredParameters {
+    $missingParams = @()
+    
+    if ([string]::IsNullOrWhiteSpace($Email)) { $missingParams += "Email (-Email)" }
+    if ([string]::IsNullOrWhiteSpace($Username)) { $missingParams += "Username (-Username)" }
+    if ([string]::IsNullOrWhiteSpace($FullName)) { $missingParams += "FullName (-FullName)" }
+    
+    if ($missingParams.Count -gt 0) {
+        Write-Error "Missing required parameters for non-interactive mode:"
+        $missingParams | ForEach-Object { Write-Host "  - $_" }
+        Write-Host
+        Show-Help
+        exit 3
+    }
+    
+    # Set script variables from parameters
+    $script:Email = $Email
+    $script:Username = $Username
+    $script:FullName = $FullName
+    $script:KeyName = $KeyName
+    $script:KeyType = $KeyType
+    $script:Passphrase = $Passphrase
+}
+
 function Get-UserInput {
     if (-not $script:InteractiveMode) {
         Test-RequiredParameters
@@ -331,30 +346,6 @@ function Get-UserInput {
     $securePassphrase = Read-Host "Enter passphrase for SSH key (press Enter for no passphrase)" -AsSecureString
     $script:Passphrase = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($securePassphrase))
     Write-Host
-}
-
-function Test-RequiredParameters {
-    $missingParams = @()
-    
-    if ([string]::IsNullOrWhiteSpace($Email)) { $missingParams += "Email (-Email)" }
-    if ([string]::IsNullOrWhiteSpace($Username)) { $missingParams += "Username (-Username)" }
-    if ([string]::IsNullOrWhiteSpace($FullName)) { $missingParams += "FullName (-FullName)" }
-    
-    if ($missingParams.Count -gt 0) {
-        Write-Error "Missing required parameters for non-interactive mode:"
-        $missingParams | ForEach-Object { Write-Host "  - $_" }
-        Write-Host
-        Show-Help
-        exit 3
-    }
-    
-    # Set script variables from parameters
-    $script:Email = $Email
-    $script:Username = $Username
-    $script:FullName = $FullName
-    $script:KeyName = $KeyName
-    $script:KeyType = $KeyType
-    $script:Passphrase = $Passphrase
 }
 
 #==============================================================================
@@ -600,10 +591,6 @@ function Test-GitHubConnection {
                 # Verify username matches
                 if ($authenticatedUser -ne $script:Username) {
                     Write-Warning "Authenticated username ($authenticatedUser) differs from provided username ($script:Username)"
-                    Write-Info "This could mean:"
-                    Write-Host "  • You entered the wrong username initially"
-                    Write-Host "  • You're using a different SSH key"
-                    Write-Host "  • Your GitHub username has changed"
                     
                     if ($script:InteractiveMode) {
                         $useAuthUser = Read-Host "Continue with the authenticated username ($authenticatedUser)? (Y/n)"
@@ -618,12 +605,6 @@ function Test-GitHubConnection {
         else {
             Write-Error "SSH connection test failed"
             Write-Info "Output: $sshTestOutput"
-            Write-Warning "Please check:"
-            Write-Host "  - The public key was correctly added to GitHub"
-            Write-Host "  - Your internet connection is working"
-            Write-Host "  - GitHub is accessible from your network"
-            Write-Host "  - Try running: ssh -T git@github.com"
-            Write-Host
             
             if ($script:InteractiveMode) {
                 $continueSetup = Read-Host "Continue with Git configuration anyway? (y/N)"
@@ -650,7 +631,7 @@ function Set-GitConfiguration {
     Write-Info "Configuring Git..."
     
     try {
-        # Basic Git configuration - Use full name for commits, not username
+        # Basic Git configuration
         & git config --global user.name $script:FullName
         if ($LASTEXITCODE -ne 0) { throw "Failed to set Git user name" }
         
@@ -658,22 +639,7 @@ function Set-GitConfiguration {
         if ($LASTEXITCODE -ne 0) { throw "Failed to set Git email" }
         
         & git config --global init.defaultBranch main
-        if ($LASTEXITCODE -ne 0) { Write-Warning "Failed to set default branch (older Git version?)" }
-        
-        # Git aliases
-        Write-Info "Setting up Git aliases..."
-        & git config --global alias.co checkout
-        & git config --global alias.br branch
-        & git config --global alias.ci commit
-        & git config --global alias.st status
-        & git config --global alias.sw switch
-        & git config --global alias.lg "log --oneline --decorate --all --graph"
-        & git config --global alias.ps "push origin HEAD"
-        & git config --global alias.pl "pull origin HEAD"
-        & git config --global alias.ad "add ."
-        & git config --global alias.cm "commit -m"
-        & git config --global alias.unstage "reset HEAD --"
-        & git config --global alias.last "log -1 HEAD"
+        if ($LASTEXITCODE -ne 0) { Write-Warning "Failed to set default branch" }
         
         # Configure Git to use SSH for GitHub
         & git config --global url."git@github.com:".insteadOf "https://github.com/"
@@ -691,35 +657,26 @@ function Set-GitConfiguration {
 function Test-GitOperations {
     Write-Info "Testing Git operations with SSH..."
     
-    $testDir = "$env:TEMP\github_ssh_test_$(Get-Random)"
-    
     try {
         $result = Show-Progress "Testing Git clone operation" {
-            & git clone git@github.com:octocat/Hello-World.git $testDir 2>&1
+            & git ls-remote git@github.com:octocat/Hello-World.git 2>&1
         }
         
-        if ($LASTEXITCODE -eq 0 -and (Test-Path $testDir)) {
-            Remove-Item $testDir -Recurse -Force -ErrorAction SilentlyContinue
+        if ($LASTEXITCODE -eq 0) {
             Write-Success "Git operations working correctly with SSH"
         }
         else {
-            Write-Warning "Git SSH test failed - this might be normal if the test repository is unavailable"
+            Write-Warning "Git SSH test failed - this might be normal"
             Write-Info "Try cloning your own repository to verify: git clone git@github.com:$script:Username/repository.git"
         }
     }
     catch {
         Write-Warning "Git SSH test failed: $($_.Exception.Message)"
-        Write-Info "Try cloning your own repository to verify: git clone git@github.com:$script:Username/repository.git"
-    }
-    finally {
-        if (Test-Path $testDir) {
-            Remove-Item $testDir -Recurse -Force -ErrorAction SilentlyContinue
-        }
     }
 }
 
 #==============================================================================
-# Summary and Cleanup Functions
+# Summary Function
 #==============================================================================
 
 function Show-Summary {
@@ -734,32 +691,11 @@ function Show-Summary {
     Write-Host "  • GitHub Username: $script:Username"
     Write-Host "  • Full Name (for commits): $script:FullName"
     Write-Host "  • Email: $script:Email"
-    Write-Host "  • Passphrase: $(if ([string]::IsNullOrWhiteSpace($script:Passphrase)) { 'No' } else { 'Yes' })"
-    Write-Host
-    
-    Write-Info "Files Created:"
-    Write-Host "  • Private key: $script:PrivateKey"
-    Write-Host "  • Public key: $script:PublicKey"
-    Write-Host "  • SSH config: $script:SshConfig"
-    Write-Host
-    
-    Write-Info "Git Configuration:"
-    Write-Host "  • Author Name: $script:FullName"
-    Write-Host "  • Author Email: $script:Email"
-    Write-Host "  • Default Branch: main"
-    Write-Host "  • SSH URL Rewriting: Enabled"
     Write-Host
     
     Write-Info "Next Steps:"
     Write-Host "  • Clone repositories: git clone git@github.com:$script:Username/repository.git"
-    Write-Host "  • Push to repositories: git push origin main"
-    Write-Host "  • Check SSH agent: ssh-add -l"
-    Write-Host
-    
-    Write-Info "Useful Commands:"
-    Write-Host "  • Test GitHub connection: ssh -T git@github.com"
-    Write-Host "  • View Git configuration: git config --global --list"
-    Write-Host "  • Add key to agent: ssh-add $script:PrivateKey"
+    Write-Host "  • Test connection: ssh -T git@github.com"
     Write-Host
 }
 
@@ -813,5 +749,5 @@ function Main {
     }
 }
 
-# Run main function
+# Run the script
 Main
