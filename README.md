@@ -111,15 +111,15 @@ github-key-setup/
 
 ## Aliases
 
-* `git co` - checkout
-* `git br` - branch
-* `git st` - status
-* `git sw` - switch
-* `git lg` - log --online --decorate --all --graph
-* `git ps` - push origin HEAD
-* `git pl` - pull origin HEAD
-* `git ad` - add .
-* `git cm` - commit -m
-* `git unstage` - reset HEAD --
-* `git last` - log -1 HEAD
+* `git co` : `checkout`
+* `git br` : `branch`
+* `git st` : `status`
+* `git sw` : `switch`
+* `git lg` : `log --online --decorate --all --graph`
+* `git ps` : `push origin HEAD`
+* `git pl` : `pull origin HEAD`
+* `git ad` : `add .`
+* `git cm` : `commit -m`
+* `git unstage` : `reset HEAD --`
+* `git last` : `log -1 HEAD`
 
