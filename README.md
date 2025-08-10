@@ -113,7 +113,6 @@ github-key-setup/
 
 * `git co` - checkout
 * `git br` - branch
-* `git ci` - commit
 * `git st` - status
 * `git sw` - switch
 * `git lg` - log --online --decorate --all --graph
