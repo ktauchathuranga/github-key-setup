@@ -1,15 +1,15 @@
 #!/bin/bash
 
 # GitHub SSH Key Setup Script for Linux
-# Version: 2.0
+# Version: 2.1
 # Author: Enhanced by GitHub Copilot
-# Description: Sets up SSH keys for GitHub authentication with improved UX and features
+# Description: Sets up SSH keys for GitHub authentication with improved UX and username handling
 # Usage: ./github_ssh_setup.sh [OPTIONS]
 
 set -e
 
 # Script version and configuration
-VERSION="2.0"
+VERSION="2.1"
 SCRIPT_NAME="GitHub SSH Setup"
 DEFAULT_KEY_TYPE="ed25519"
 DEFAULT_KEY_NAME="github_key"
@@ -98,7 +98,7 @@ ${BOLD}EXAMPLES:${NC}
         $0
 
     Non-interactive mode:
-        $0 -n -e "user@example.com" -u "ktauchathuranga" -f "Kasun Tharindu" -t "ed25519"
+        $0 -n -e "user@example.com" -u "ktauchathuranga" -f "Ashen Chathuranga" -t "ed25519"
 
     Generate RSA key with custom name:
         $0 -t rsa -k "my_github_key"
@@ -108,10 +108,16 @@ ${BOLD}SUPPORTED KEY TYPES:${NC}
     rsa        - 4096-bit RSA keys (widely compatible)
     ecdsa      - ECDSA P-256 keys (good balance)
 
-${BOLD}NOTE:${NC}
-    Two different names are used:
-    - GitHub Username: The unique identifier in your GitHub URL (github.com/username)
-    - Full Name: Your actual name used for Git commit attribution (e.g., "John Doe")
+${BOLD}IMPORTANT - TWO DIFFERENT NAMES:${NC}
+    GitHub Username: Your unique identifier in GitHub URLs
+    • Example: If your profile is github.com/ktauchathuranga, username is "ktauchathuranga"
+    • Used for: Repository URLs, authentication, cloning
+    • Format: git@github.com:USERNAME/repository.git
+    
+    Full Name: Your actual name for Git commit attribution
+    • Example: "Ashen Chathuranga" (your real name)
+    • Used for: Git commit author information
+    • Shows up in: Git history, GitHub commit displays
 
 ${BOLD}TROUBLESHOOTING:${NC}
     If SSH connection fails:
@@ -122,7 +128,7 @@ ${BOLD}TROUBLESHOOTING:${NC}
     
     If Git operations fail:
     1. Verify Git is configured: git config --list
-    2. Test with: git clone git@github.com:octocat/Hello-World.git /tmp/test
+    2. Test with: git clone git@github.com:USERNAME/repository.git
     3. Check SSH config: cat ~/.ssh/config
 
 EOF
@@ -208,6 +214,102 @@ check_ssh_agent() {
 }
 
 #==============================================================================
+# GitHub Username Validation Functions
+#==============================================================================
+
+# Validate GitHub username format
+validate_github_username() {
+    local username=$1
+    
+    # GitHub username rules:
+    # - Only alphanumeric characters and hyphens
+    # - Cannot start or end with hyphen
+    # - Cannot have consecutive hyphens
+    # - Maximum 39 characters
+    # - Minimum 1 character
+    
+    if [[ ! "$username" =~ ^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?$ ]]; then
+        return 1
+    fi
+    
+    if [[ ${#username} -gt 39 || ${#username} -lt 1 ]]; then
+        return 1
+    fi
+    
+    if [[ "$username" == *"--"* ]]; then
+        return 1
+    fi
+    
+    return 0
+}
+
+# Check if GitHub username exists (basic check)
+check_github_username_exists() {
+    local username=$1
+    
+    print_info "Verifying GitHub username exists..."
+    
+    # Try to access the GitHub user profile
+    if command -v curl &> /dev/null; then
+        local response=$(curl -s -o /dev/null -w "%{http_code}" "https://api.github.com/users/$username" 2>/dev/null)
+        if [[ "$response" = "200" ]]; then
+            print_success "GitHub username '$username' verified"
+            return 0
+        elif [[ "$response" = "404" ]]; then
+            print_warning "GitHub username '$username' not found"
+            return 1
+        else
+            print_warning "Could not verify username (network issue or rate limit)"
+            return 0  # Don't fail setup due to network issues
+        fi
+    elif command -v wget &> /dev/null; then
+        if wget -q --spider "https://api.github.com/users/$username" 2>/dev/null; then
+            print_success "GitHub username '$username' verified"
+            return 0
+        else
+            print_warning "Could not verify GitHub username (may not exist or network issue)"
+            return 1
+        fi
+    else
+        print_warning "Cannot verify username - curl or wget not available"
+        return 0  # Don't fail setup due to missing tools
+    fi
+}
+
+# Suggest username based on current user or email
+suggest_github_username() {
+    local suggestions=()
+    
+    # Get current system username
+    local current_user=$(whoami 2>/dev/null || echo "")
+    if [[ -n "$current_user" && "$current_user" != "root" ]]; then
+        suggestions+=("$current_user")
+    fi
+    
+    # Extract from email if provided
+    if [[ -n "$EMAIL" ]]; then
+        local email_user=$(echo "$EMAIL" | cut -d'@' -f1)
+        if [[ "$email_user" != "$current_user" ]]; then
+            suggestions+=("$email_user")
+        fi
+    fi
+    
+    # Add some variations
+    if [[ -n "$current_user" ]]; then
+        suggestions+=("${current_user}-dev" "${current_user}dev")
+    fi
+    
+    if [[ ${#suggestions[@]} -gt 0 ]]; then
+        echo
+        print_info "Suggested GitHub usernames based on your system:"
+        for i in "${!suggestions[@]}"; do
+            echo "  $((i+1))) ${suggestions[$i]}"
+        done
+        echo
+    fi
+}
+
+#==============================================================================
 # User Input Functions
 #==============================================================================
 
@@ -226,30 +328,9 @@ get_user_input() {
     
     # Get full name first
     while [[ -z "$USER_FULL_NAME" ]]; do
-        read -p "Enter your full name (for Git commits, e.g., 'John Doe'): " USER_FULL_NAME
+        read -p "Enter your full name (for Git commits, e.g., 'Ashen Chathuranga'): " USER_FULL_NAME
         if [[ -z "$USER_FULL_NAME" ]]; then
             print_error "Full name cannot be empty"
-        fi
-    done
-    
-    # Get GitHub username with clear explanation
-    print_info "GitHub Username Information:"
-    print_info "Your GitHub username is the unique identifier in your profile URL"
-    print_info "Example: If your profile is github.com/ktauchathuranga, your username is 'ktauchathuranga'"
-    print_info "This is different from your full name and display name"
-    echo
-    
-    while [[ -z "$GITHUB_USERNAME" ]]; do
-        read -p "Enter your GitHub username (from your profile URL): " GITHUB_USERNAME
-        if [[ -z "$GITHUB_USERNAME" ]]; then
-            print_error "GitHub username cannot be empty"
-        else
-            print_info "You entered: $GITHUB_USERNAME"
-            print_info "Your repositories will be accessed as: git@github.com:$GITHUB_USERNAME/repository.git"
-            read -p "Is this correct? (Y/n): " confirm_username
-            if [[ "$confirm_username" =~ ^[Nn]$ ]]; then
-                GITHUB_USERNAME=""
-            fi
         fi
     done
     
@@ -258,10 +339,66 @@ get_user_input() {
         read -p "Enter your email address (associated with GitHub): " EMAIL
         if [[ -z "$EMAIL" ]]; then
             print_error "Email address cannot be empty"
+        elif [[ ! "$EMAIL" =~ ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$ ]]; then
+            print_error "Please enter a valid email address"
+            EMAIL=""
+        fi
+    done
+    
+    # Get GitHub username with enhanced validation
+    echo
+    print_header "=== GitHub Username Setup ==="
+    print_info "Your GitHub username is the unique identifier in your profile URL"
+    print_info "Example: If your profile is github.com/ktauchathuranga, your username is 'ktauchathuranga'"
+    print_info "This is different from your full name and display name"
+    
+    # Suggest usernames
+    suggest_github_username
+    
+    while [[ -z "$GITHUB_USERNAME" ]]; do
+        read -p "Enter your GitHub username (from your profile URL): " GITHUB_USERNAME
+        
+        if [[ -z "$GITHUB_USERNAME" ]]; then
+            print_error "GitHub username cannot be empty"
+            continue
+        fi
+        
+        # Validate format
+        if ! validate_github_username "$GITHUB_USERNAME"; then
+            print_error "Invalid GitHub username format"
+            print_info "GitHub usernames must:"
+            echo "  • Only contain alphanumeric characters and hyphens"
+            echo "  • Not start or end with a hyphen"
+            echo "  • Not contain consecutive hyphens"
+            echo "  • Be 1-39 characters long"
+            GITHUB_USERNAME=""
+            continue
+        fi
+        
+        # Check if username exists
+        if check_github_username_exists "$GITHUB_USERNAME"; then
+            print_info "You entered: $GITHUB_USERNAME"
+            print_info "Your repositories will be accessed as: git@github.com:$GITHUB_USERNAME/repository.git"
+            
+            read -p "Is this correct? (Y/n): " confirm_username
+            if [[ "$confirm_username" =~ ^[Nn]$ ]]; then
+                GITHUB_USERNAME=""
+                continue
+            fi
+            break
+        else
+            print_warning "The username '$GITHUB_USERNAME' may not exist on GitHub"
+            read -p "Do you want to continue anyway? (y/N): " continue_anyway
+            if [[ "$continue_anyway" =~ ^[Yy]$ ]]; then
+                break
+            else
+                GITHUB_USERNAME=""
+            fi
         fi
     done
     
     # Get key name
+    echo
     read -p "Enter a name for your SSH key (default: $DEFAULT_KEY_NAME): " input_key_name
     KEY_NAME=${input_key_name:-$DEFAULT_KEY_NAME}
     
@@ -284,8 +421,21 @@ get_user_input() {
     done
     
     # Get passphrase
+    echo
+    print_info "SSH Key Passphrase:"
+    print_info "A passphrase adds an extra layer of security to your SSH key"
     read -s -p "Enter passphrase for SSH key (press Enter for no passphrase): " PASSPHRASE
     echo
+    
+    if [[ -z "$PASSPHRASE" ]]; then
+        print_warning "No passphrase set - your SSH key will be unprotected"
+        read -p "Are you sure you want to continue without a passphrase? (y/N): " confirm_no_pass
+        if [[ ! "$confirm_no_pass" =~ ^[Yy]$ ]]; then
+            print_info "Please run the script again and set a passphrase"
+            exit 0
+        fi
+    fi
+    
     echo
 }
 
@@ -304,6 +454,13 @@ validate_required_params() {
         done
         echo
         show_help
+        exit $ERR_USER_INPUT
+    fi
+    
+    # Validate username format in non-interactive mode
+    if ! validate_github_username "$GITHUB_USERNAME"; then
+        print_error "Invalid GitHub username format: $GITHUB_USERNAME"
+        print_info "GitHub usernames must only contain alphanumeric characters and hyphens"
         exit $ERR_USER_INPUT
     fi
 }
@@ -465,6 +622,17 @@ display_public_key() {
     echo
     print_color "$GREEN" "$(cat "$public_key")"
     echo
+    
+    # Try to copy to clipboard if available
+    if command -v xclip &> /dev/null; then
+        cat "$public_key" | xclip -selection clipboard 2>/dev/null && print_success "Public key copied to clipboard!"
+    elif command -v pbcopy &> /dev/null; then
+        cat "$public_key" | pbcopy 2>/dev/null && print_success "Public key copied to clipboard!"
+    else
+        print_info "Install xclip or pbcopy for automatic clipboard copying"
+    fi
+    
+    echo
     print_header "=== Instructions to add key to GitHub ==="
     echo "1. Go to https://github.com/settings/keys"
     echo "2. Click 'New SSH key'"
@@ -475,7 +643,7 @@ display_public_key() {
     echo
 }
 
-# Test GitHub SSH connection
+# Test GitHub SSH connection with improved username detection
 test_github_connection() {
     if [[ "$INTERACTIVE_MODE" = true ]]; then
         read -p "Press Enter after you've added the key to GitHub..."
@@ -501,24 +669,29 @@ test_github_connection() {
             
             # Verify username matches
             if [[ "$authenticated_user" != "$GITHUB_USERNAME" ]]; then
-                print_warning "Authenticated username ($authenticated_user) differs from provided username ($GITHUB_USERNAME)"
+                print_warning "Authenticated username differs from provided username"
+                print_info "  • Provided username: $GITHUB_USERNAME"
+                print_info "  • Authenticated as: $authenticated_user"
                 print_info "This could mean:"
-                echo "  • You entered the wrong username initially"
-                echo "  • You're using a different SSH key"
-                echo "  • Your GitHub username has changed"
+                echo "    • You entered the wrong username initially"
+                echo "    • You're using a different SSH key"
+                echo "    • Your GitHub username has changed"
+                echo
                 
                 if [[ "$INTERACTIVE_MODE" = true ]]; then
-                    read -p "Continue with the authenticated username ($authenticated_user)? (Y/n): " use_auth_user
+                    read -p "Update to use the authenticated username ($authenticated_user)? (Y/n): " use_auth_user
                     if [[ ! "$use_auth_user" =~ ^[Nn]$ ]]; then
                         print_info "Updating username to: $authenticated_user"
                         GITHUB_USERNAME="$authenticated_user"
                     fi
+                else
+                    print_info "Non-interactive mode: keeping original username"
                 fi
             fi
         fi
     else
         print_error "SSH connection test failed"
-        print_info "Output: $ssh_test_output"
+        print_info "SSH output: $ssh_test_output"
         print_warning "Please check:"
         echo "  - The public key was correctly added to GitHub"
         echo "  - Your internet connection is working"
@@ -582,6 +755,7 @@ configure_git() {
     
     print_success "Git configuration completed"
     print_info "Git commits will be attributed to: $USER_FULL_NAME <$EMAIL>"
+    print_info "GitHub repositories will use SSH with username: $GITHUB_USERNAME"
 }
 
 # Test Git operations
@@ -592,8 +766,14 @@ test_git_operations() {
     local test_dir="/tmp/github_ssh_test_$$"
     
     {
-        # Test cloning a public repository
-        git clone git@github.com:octocat/Hello-World.git "$test_dir" &>/dev/null
+        # Test cloning a public repository using the verified username
+        local test_repo="git@github.com:octocat/Hello-World.git"
+        if [[ "$GITHUB_USERNAME" != "octocat" ]]; then
+            # Use a known public repo for testing
+            test_repo="git@github.com:octocat/Hello-World.git"
+        fi
+        
+        git clone "$test_repo" "$test_dir" &>/dev/null
         rm -rf "$test_dir"
     } &
     
@@ -604,7 +784,8 @@ test_git_operations() {
         print_success "Git operations working correctly with SSH"
     else
         print_warning "Git SSH test failed - this might be normal if the test repository is unavailable"
-        print_info "Try cloning your own repository to verify: git clone git@github.com:$GITHUB_USERNAME/repository.git"
+        print_info "Try cloning your own repository to verify:"
+        print_info "  git clone git@github.com:$GITHUB_USERNAME/repository.git"
     fi
 }
 
@@ -641,16 +822,17 @@ show_summary() {
     echo "  • SSH URL Rewriting: Enabled"
     echo
     
-    print_info "Next Steps:"
+    print_info "Repository Access:"
     echo "  • Clone repositories: git clone git@github.com:$GITHUB_USERNAME/repository.git"
     echo "  • Push to repositories: git push origin main"
-    echo "  • Check SSH agent: ssh-add -l"
+    echo "  • Your commits will show as: $USER_FULL_NAME"
     echo
     
     print_info "Useful Commands:"
     echo "  • Test GitHub connection: ssh -T git@github.com"
     echo "  • View Git configuration: git config --global --list"
     echo "  • Add key to agent: ssh-add $private_key"
+    echo "  • List loaded keys: ssh-add -l"
 }
 
 # Parse command line arguments

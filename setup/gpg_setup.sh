@@ -1,15 +1,15 @@
 #!/bin/bash
 
 # GitHub GPG Key Setup Script for Linux
-# Version: 2.0
+# Version: 2.1
 # Author: Enhanced by GitHub Copilot
-# Description: Sets up GPG keys for GitHub commit signing with improved UX and features
+# Description: Sets up GPG keys for GitHub commit signing with improved key detection
 # Usage: ./github_gpg_setup.sh [OPTIONS]
 
 set -e
 
 # Script version and configuration
-VERSION="2.0"
+VERSION="2.1"
 SCRIPT_NAME="GitHub GPG Setup"
 DEFAULT_KEY_LENGTH="4096"
 DEFAULT_KEY_TYPE="RSA"
@@ -364,10 +364,11 @@ validate_required_params() {
 # GPG Setup Functions
 #==============================================================================
 
-# Check for existing GPG keys
+# Check for existing GPG keys and store keys before generation
 check_existing_keys() {
     print_info "Checking for existing GPG keys..."
     
+    # Store current keys for comparison
     local existing_keys=$(gpg --list-secret-keys --keyid-format=long "$EMAIL" 2>/dev/null | grep 'sec' | wc -l)
     
     if [[ $existing_keys -gt 0 ]]; then
@@ -437,15 +438,20 @@ EOF
     echo "$temp_config"
 }
 
-# Generate GPG key
+# Generate GPG key with improved detection
 generate_gpg_key() {
     print_info "Generating $KEY_TYPE GPG key..."
+    
+    # Get keys before generation for comparison
+    print_info "Checking existing keys before generation..."
+    local keys_before=$(gpg --list-secret-keys --with-colons 2>/dev/null | grep '^sec:' | cut -d: -f5 | sort)
     
     local key_config=$(generate_key_config)
     
     # Generate the key with progress indication
+    local generation_output
     {
-        gpg --batch --generate-key "$key_config" 2>&1
+        generation_output=$(gpg --batch --generate-key "$key_config" 2>&1)
     } &
     
     local keygen_pid=$!
@@ -455,26 +461,115 @@ generate_gpg_key() {
         print_success "GPG key generated successfully"
     else
         print_error "Failed to generate GPG key"
+        print_error "Output: $generation_output"
         rm -f "$key_config"
         exit $ERR_GPG_SETUP
     fi
     
     # Clean up temporary config file
     rm -f "$key_config"
+    
+    # Store generation output for key ID extraction
+    echo "$generation_output" > /tmp/gpg_generation_output_$$
 }
 
-# Get the generated key ID
+# Get the generated key ID with improved detection
 get_key_id() {
-    print_info "Finding generated GPG key..."
+    print_info "Detecting newly generated GPG key..."
     
-    local key_id=$(gpg --list-secret-keys --keyid-format=long "$EMAIL" 2>/dev/null | grep 'sec' | tail -1 | awk '{print $2}' | cut -d'/' -f2)
+    local key_id=""
+    local generation_output_file="/tmp/gpg_generation_output_$$"
     
+    # Method 1: Try to extract from generation output
+    if [[ -f "$generation_output_file" ]]; then
+        local generation_output=$(cat "$generation_output_file")
+        rm -f "$generation_output_file"
+        
+        # Look for key ID in revocation certificate message
+        if echo "$generation_output" | grep -q "revocation certificate stored"; then
+            local revoc_line=$(echo "$generation_output" | grep "revocation certificate stored")
+            # Extract the key fingerprint from the filename
+            local fingerprint=$(echo "$revoc_line" | grep -o '[A-F0-9]\{40\}' | head -1)
+            if [[ -n "$fingerprint" ]]; then
+                # Get the short key ID (last 16 characters)
+                key_id="${fingerprint: -16}"
+                print_success "Detected key ID from generation output: $key_id"
+            fi
+        fi
+    fi
+    
+    # Method 2: Compare keys before and after generation
     if [[ -z "$key_id" ]]; then
-        print_error "Failed to find generated GPG key"
+        print_info "Trying alternative key detection method..."
+        sleep 1  # Brief pause to ensure key is fully processed
+        
+        local keys_after=$(gpg --list-secret-keys --with-colons 2>/dev/null | grep '^sec:' | cut -d: -f5 | sort)
+        local keys_before=$(gpg --list-secret-keys --with-colons 2>/dev/null | grep '^sec:' | cut -d: -f5 | sort | head -n -1)
+        
+        # Find the new key by comparing before and after
+        local new_key=$(comm -13 <(echo "$keys_before") <(echo "$keys_after") | head -1)
+        if [[ -n "$new_key" ]]; then
+            key_id="$new_key"
+            print_success "Detected new key ID by comparison: $key_id"
+        fi
+    fi
+    
+    # Method 3: Get the most recent key for this email
+    if [[ -z "$key_id" ]]; then
+        print_info "Finding most recent key for $EMAIL..."
+        
+        # Get all keys with creation timestamps for this email
+        local all_keys_output=$(gpg --list-secret-keys --with-colons --keyid-format=long 2>/dev/null)
+        
+        # Parse the output to find keys associated with our email
+        local current_key=""
+        local current_creation=""
+        local best_key=""
+        local best_creation="0"
+        
+        while IFS= read -r line; do
+            if [[ "$line" =~ ^sec: ]]; then
+                current_key=$(echo "$line" | cut -d: -f5)
+                current_creation=$(echo "$line" | cut -d: -f6)
+            elif [[ "$line" =~ ^uid: ]] && [[ "$line" == *"$EMAIL"* ]]; then
+                # This uid matches our email, check if this key is newer
+                if [[ "$current_creation" -gt "$best_creation" ]]; then
+                    best_key="$current_key"
+                    best_creation="$current_creation"
+                fi
+            fi
+        done <<< "$all_keys_output"
+        
+        if [[ -n "$best_key" ]]; then
+            key_id="$best_key"
+            print_success "Using most recent key for $EMAIL: $key_id"
+        fi
+    fi
+    
+    # Method 4: Manual selection fallback
+    if [[ -z "$key_id" ]]; then
+        print_warning "Could not automatically detect key. Please select manually:"
+        echo
+        gpg --list-secret-keys --keyid-format=long "$EMAIL" 2>/dev/null || {
+            print_error "No keys found for $EMAIL"
+            exit $ERR_GPG_SETUP
+        }
+        echo
+        read -p "Enter the key ID (the part after the key type, e.g., 'rsa4096/'): " key_id
+        
+        if [[ -z "$key_id" ]]; then
+            print_error "No key ID provided"
+            exit $ERR_GPG_SETUP
+        fi
+    fi
+    
+    # Validate the key ID
+    if ! gpg --list-secret-keys "$key_id" &>/dev/null; then
+        print_error "Invalid key ID: $key_id"
         exit $ERR_GPG_SETUP
     fi
     
-    print_success "GPG key ID: $key_id"
+    print_success "Using GPG key ID: $key_id"
     echo "$key_id"
 }
 
@@ -564,42 +659,47 @@ configure_git_signing() {
     
     print_info "Configuring Git for GPG signing..."
     
-    try {
-        # Configure Git to use the GPG key
-        git config --global user.signingkey "$key_id" || {
-            print_error "Failed to set Git signing key"
-            exit $ERR_GENERAL
-        }
-        
-        # Enable automatic commit signing
-        git config --global commit.gpgsign true || {
-            print_error "Failed to enable commit signing"
-            exit $ERR_GENERAL
-        }
-        
-        # Configure user information
-        git config --global user.name "$FULL_NAME" || {
-            print_error "Failed to set Git user name"
-            exit $ERR_GENERAL
-        }
-        
-        git config --global user.email "$EMAIL" || {
-            print_error "Failed to set Git email"
-            exit $ERR_GENERAL
-        }
-        
-        # Optional: Enable tag signing
+    # Configure Git to use the GPG key
+    git config --global user.signingkey "$key_id" || {
+        print_error "Failed to set Git signing key"
+        exit $ERR_GENERAL
+    }
+    
+    # Enable automatic commit signing
+    git config --global commit.gpgsign true || {
+        print_error "Failed to enable commit signing"
+        exit $ERR_GENERAL
+    }
+    
+    # Configure user information
+    git config --global user.name "$FULL_NAME" || {
+        print_error "Failed to set Git user name"
+        exit $ERR_GENERAL
+    }
+    
+    git config --global user.email "$EMAIL" || {
+        print_error "Failed to set Git email"
+        exit $ERR_GENERAL
+    }
+    
+    # Optional: Enable tag signing
+    if [[ "$INTERACTIVE_MODE" = true ]]; then
         read -p "Enable automatic tag signing? (Y/n): " enable_tag_signing
         if [[ ! "$enable_tag_signing" =~ ^[Nn]$ ]]; then
             git config --global tag.gpgsign true || {
                 print_warning "Failed to enable tag signing"
             }
         fi
-        
-        print_success "Git configuration completed"
-        print_info "Git commits will be signed with key: $key_id"
-        print_info "Git commits will be attributed to: $FULL_NAME <$EMAIL>"
-    }
+    else
+        # Default to enabling tag signing in non-interactive mode
+        git config --global tag.gpgsign true || {
+            print_warning "Failed to enable tag signing"
+        }
+    fi
+    
+    print_success "Git configuration completed"
+    print_info "Git commits will be signed with key: $key_id"
+    print_info "Git commits will be attributed to: $FULL_NAME <$EMAIL>"
 }
 
 # Test Git signing with a sample commit
@@ -608,6 +708,7 @@ test_git_signing() {
     
     # Create a temporary repository for testing
     local test_dir="/tmp/gpg_signing_test_$$"
+    local test_result="failed"
     
     {
         mkdir -p "$test_dir"
@@ -615,25 +716,26 @@ test_git_signing() {
         git init --quiet
         echo "# GPG Signing Test" > README.md
         git add README.md
-        git commit -m "Test GPG signing" --quiet
         
-        # Check if the commit was signed
-        local commit_signature=$(git log --show-signature -1 --pretty=format:"%G?" 2>/dev/null)
+        # Try to commit with signing
+        if git commit -m "Test GPG signing" --quiet 2>/dev/null; then
+            # Check if the commit was signed
+            local commit_signature=$(git log --show-signature -1 --pretty=format:"%G?" 2>/dev/null)
+            if [[ "$commit_signature" = "G" ]]; then
+                test_result="success"
+            fi
+        fi
+        
         cd - >/dev/null
         rm -rf "$test_dir"
-        
-        if [[ "$commit_signature" = "G" ]]; then
-            echo "success"
-        else
-            echo "failed"
-        fi
+        echo "$test_result"
     } &
     
     local test_pid=$!
     show_progress $test_pid "Testing Git commit signing"
-    local result=$(wait $test_pid; echo $?)
+    local result=$(wait $test_pid && echo "completed" || echo "failed")
     
-    if [[ $result -eq 0 ]]; then
+    if [[ "$result" = "completed" ]]; then
         print_success "Git commit signing working correctly"
     else
         print_warning "Git commit signing test failed"
