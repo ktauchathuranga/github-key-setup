@@ -76,6 +76,7 @@ $ErrorActionPreference = "Stop"
 $script:InteractiveMode = -not $NonInteractive
 $script:TempConfigFile = ""
 
+<<<<<<< Updated upstream
 #==============================================================================
 # Helper Functions
 #==============================================================================
@@ -86,6 +87,21 @@ function Write-ColorOutput {
         [string]$Color = "White"
     )
     Write-Host $Message -ForegroundColor $Color
+=======
+# Check if Git and GPG are installed
+try { 
+    Get-Command git -ErrorAction Stop 
+} catch {
+    Write-Host "Git is not installed. Please install Git." -ForegroundColor Red
+    exit 1
+}
+
+try { 
+    Get-Command gpg -ErrorAction Stop 
+} catch {
+    Write-Host "GPG is not installed. Please install GPG (e.g., Gpg4win)." -ForegroundColor Red
+    exit 1
+>>>>>>> Stashed changes
 }
 
 function Write-Success { param([string]$Message) Write-ColorOutput "✓ $Message" "Green" }
@@ -94,6 +110,7 @@ function Write-Warning { param([string]$Message) Write-ColorOutput "⚠ $Message
 function Write-Info { param([string]$Message) Write-ColorOutput "ℹ $Message" "Cyan" }
 function Write-Header { param([string]$Message) Write-ColorOutput $Message "Green" }
 
+<<<<<<< Updated upstream
 function Show-Progress {
     param(
         [string]$Activity,
@@ -563,11 +580,131 @@ function Get-GeneratedKeyId {
         exit 4
     }
 }
+=======
+# Get keys before generation for comparison
+Write-Host "Checking existing keys..." -ForegroundColor Yellow
+$keysBefore = & gpg --list-secret-keys --keyid-format=long --with-colons | Where-Object { $_ -like "sec:*" }
+
+# Create GPG batch config file
+$tempFile = "$env:TEMP\gpg-key-config.txt"
+Set-Content -Path $tempFile -Value @"
+%no-protection
+Key-Type: RSA
+Key-Length: 4096
+Subkey-Type: RSA
+Name-Real: $name
+Name-Email: $email
+Name-Comment: $comment
+Expire-Date: 0
+%commit
+"@
+
+# Generate the key
+Write-Host "Generating GPG key..." -ForegroundColor Yellow
+& gpg --batch --generate-key $tempFile
+Remove-Item $tempFile
+
+# Get keys after generation and find the new one
+Write-Host "Detecting newly generated key..." -ForegroundColor Yellow
+Start-Sleep -Seconds 1  # Brief pause to ensure key is fully processed
+
+$keysAfter = & gpg --list-secret-keys --keyid-format=long --with-colons | Where-Object { $_ -like "sec:*" }
+$newKeyLine = $keysAfter | Where-Object { $_ -notin $keysBefore } | Select-Object -First 1
+
+if ($newKeyLine) {
+    $keyId = ($newKeyLine -split ':')[4]
+    Write-Host "Automatically detected new key ID: $keyId" -ForegroundColor Green
+} else {
+    # Fallback: Get the most recent key for the email
+    Write-Host "Could not detect new key automatically. Finding most recent key for $email..." -ForegroundColor Yellow
+    
+    # Get all keys with timestamps and filter by email
+    $allKeysDetailed = & gpg --list-secret-keys --keyid-format=long --with-colons
+    $keyBlocks = @()
+    $currentBlock = @()
+    
+    foreach ($line in $allKeysDetailed) {
+        if ($line -like "sec:*") {
+            if ($currentBlock.Count -gt 0) {
+                $keyBlocks += ,$currentBlock
+            }
+            $currentBlock = @($line)
+        } elseif ($line -like "uid:*" -or $line -like "ssb:*") {
+            $currentBlock += $line
+        }
+    }
+    if ($currentBlock.Count -gt 0) {
+        $keyBlocks += ,$currentBlock
+    }
+    
+    # Find blocks that contain our email and get the most recent
+    $matchingKeys = @()
+    foreach ($block in $keyBlocks) {
+        $uidLine = $block | Where-Object { $_ -like "*uid:*" -and $_ -like "*$email*" }
+        if ($uidLine) {
+            $secLine = $block[0]
+            $keyId = ($secLine -split ':')[4]
+            $creationTime = ($secLine -split ':')[5]
+            $matchingKeys += [PSCustomObject]@{
+                KeyId = $keyId
+                CreationTime = $creationTime
+                SecLine = $secLine
+            }
+        }
+    }
+    
+    if ($matchingKeys.Count -gt 0) {
+        # Sort by creation time (descending) and get the most recent
+        $mostRecentKey = $matchingKeys | Sort-Object CreationTime -Descending | Select-Object -First 1
+        $keyId = $mostRecentKey.KeyId
+        Write-Host "Using most recent key for $email`: $keyId" -ForegroundColor Green
+    }
+}
+
+# Final fallback
+if (-not $keyId) {
+    Write-Host "Could not automatically detect key. Please select manually:" -ForegroundColor Yellow
+    $keyList = & gpg --list-secret-keys --keyid-format=long
+    $keyList | Write-Host -ForegroundColor Gray
+    $keyId = Read-Host "Enter the key ID (the part after rsa4096/)"
+}
+
+if (-not $keyId) {
+    Write-Host "Could not find generated key." -ForegroundColor Red
+    exit 1
+}
+
+Write-Host "Using Key ID: $keyId" -ForegroundColor Green
+
+# Export public key
+Write-Host
+Write-Host "=== Your GPG Public Key ===" -ForegroundColor Green
+$pubKey = & gpg --armor --export "$keyId"
+
+if ($pubKey) {
+    $pubKey | Write-Host -ForegroundColor Cyan
+    
+    # Copy to clipboard
+    try {
+        $pubKey | Set-Clipboard
+        Write-Host "Public GPG key copied to clipboard!" -ForegroundColor Green
+    } catch {
+        Write-Host "Note: Could not copy to clipboard." -ForegroundColor Yellow
+    }
+} else {
+    Write-Host "Failed to export public key. Please check the key ID: $keyId" -ForegroundColor Red
+    exit 1
+}
+
+Write-Host "Go to https://github.com/settings/keys -> New GPG key -> Paste and save."
+Read-Host "Press Enter once done..."
+>>>>>>> Stashed changes
 
 #==============================================================================
 # GitHub Integration Functions
 #==============================================================================
 
+<<<<<<< Updated upstream
 function Show-PublicKey {
     param([string]$KeyId)
     
@@ -855,3 +992,9 @@ function Main {
 
 # Run main function
 Main
+=======
+Write-Host
+Write-Host "GPG key setup complete and Git configured." -ForegroundColor Green
+Write-Host "Key ID: $keyId" -ForegroundColor Cyan
+Write-Host "You can now sign your commits!" -ForegroundColor Green
+>>>>>>> Stashed changes
