@@ -1,4 +1,4 @@
-# 🔐 GitHub Key Setup
+# GitHub Key Setup
 
 Easily set up your **SSH** and **GPG** keys for GitHub on **Windows**, **Linux**, or **macOS**.
 
@@ -9,7 +9,7 @@ This tool automates:
 
 ---
 
-## 📦 Features
+## Features
 
 - Cross-platform support (PowerShell & Bash)
 - SSH key creation and GitHub configuration
@@ -19,24 +19,24 @@ This tool automates:
 
 ---
 
-## ⚙️ Prerequisites
+## Prerequisites
 
 Ensure you have the following installed:
 
-### 🐧 Linux / 🍎 macOS
+### Linux / macOS
 - `git`
 - `gpg`
 - `ssh`
   
-### 🪟 Windows
+### Windows
 - [Git for Windows](https://git-scm.com/)
 - [Gpg4win](https://gpg4win.org/)
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
-### 🔧 Linux/macOS
+### Linux/macOS
 ```bash
 git clone https://github.com/yourusername/github-key-setup.git
 cd github-key-setup
@@ -44,7 +44,7 @@ chmod +x install.sh
 ./install.sh
 ````
 
-### 🪟 Windows
+### Windows
 
 1. Clone the repo or download it as ZIP.
 2. Right-click `install.ps1` → **Run with PowerShell with Admin privilege**
@@ -62,7 +62,7 @@ When you run the installer, you'll be prompted to choose:
 
 ---
 
-## 🛠️ Manual Mode (Advanced)
+## Manual Mode (Advanced)
 
 ### Linux/macOS:
 
@@ -83,7 +83,7 @@ You can run individual setup scripts from the `setup/` directory:
 
 ---
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 github-key-setup/
@@ -100,7 +100,7 @@ github-key-setup/
 
 ---
 
-## 🔐 What It Does
+## What It Does
 
 * Generates SSH or GPG key pairs
 * Starts `ssh-agent` and adds SSH key
@@ -108,6 +108,35 @@ github-key-setup/
 * Configures Git with your name/email
 * Enables GPG commit signing in Git
 * Optionally copies your public key to clipboard
+
+---
+
+## Troubleshooting
+
+### Windows GPG Signing Error
+
+If you encounter the following error when trying to commit with GPG signing:
+
+```
+error: gpg failed to sign the data:
+gpg: skipped "KEYID": No secret key
+fatal: failed to write commit object
+```
+
+**Solution:** Configure Git to use the correct GPG program path:
+
+```bash
+git config --global gpg.program "C:\Program Files (x86)\GnuPG\bin\gpg.exe"
+```
+
+Or if you have Gpg4win installed in a different location:
+```bash
+git config --global gpg.program "C:\Program Files (x86)\Gpg4win\bin\gpg.exe"
+```
+
+This error typically occurs because Git is using a different GPG executable than where your key was generated.
+
+---
 
 ## Aliases
 
@@ -122,4 +151,3 @@ github-key-setup/
 * `git cm` : `commit -m`
 * `git unstage` : `reset HEAD --`
 * `git last` : `log -1 HEAD`
-
