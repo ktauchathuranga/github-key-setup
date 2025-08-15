@@ -52,7 +52,7 @@ chmod +x install.sh
 
 ---
 
-## 🧭 Installation Options
+## Installation Options
 
 When you run the installer, you'll be prompted to choose:
 
