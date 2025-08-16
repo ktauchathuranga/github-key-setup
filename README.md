@@ -3,9 +3,9 @@
 Easily set up your **SSH** and **GPG** keys for GitHub on **Windows**, **Linux**, or **macOS**.
 
 This tool automates:
-- ✅ SSH key generation & GitHub integration
-- ✅ GPG key generation & Git commit signing
-- ✅ Git global config setup
+- SSH key generation & GitHub integration
+- GPG key generation & Git commit signing
+- Git global config setup
 
 ---
 
@@ -140,13 +140,13 @@ This error typically occurs because Git is using a different GPG executable than
 
 ## Aliases
 
-* `git co` : `checkout`
+* `git ck` : `checkout`
 * `git br` : `branch`
 * `git st` : `status`
 * `git sw` : `switch`
 * `git lg` : `log --online --decorate --all --graph`
-* `git ps` : `push origin HEAD`
-* `git pl` : `pull origin HEAD`
+* `git ps` : `push`
+* `git pl` : `pull`
 * `git ad` : `add .`
 * `git cm` : `commit -m`
 * `git unstage` : `reset HEAD --`
