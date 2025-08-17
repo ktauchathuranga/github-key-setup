@@ -746,6 +746,7 @@ configure_git() {
     git config --global alias.cm "commit -m"
     git config --global alias.unstage "reset HEAD --"
     git config --global alias.last "log -1 HEAD"
+    git config --global alias.cl clone
     
     # Configure Git to use SSH for GitHub
     git config --global url."git@github.com:".insteadOf "https://github.com/" || {

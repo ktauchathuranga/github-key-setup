@@ -151,3 +151,4 @@ This error typically occurs because Git is using a different GPG executable than
 * `git cm` : `commit -m`
 * `git unstage` : `reset HEAD --`
 * `git last` : `log -1 HEAD`
+* `git cl` : `clone`
