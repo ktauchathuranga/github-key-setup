@@ -47,9 +47,10 @@ chmod +x install.sh
 ### Windows
 
 1. Clone the repo or download it as ZIP.
-2. Right-click `install.ps1` → **Run with PowerShell with Admin privilege**
-3. Follow the prompts.
-
+2. Open PowerShell as admin.
+3. Paste `Set-ExecutionPolicy RemoteSigned -Scope CurrentUser` (press `A` or equivalent)
+4. Navigate to the cloned folder and run `.\install.ps1`
+5. Follow the instructions. :)
 ---
 
 ## Installation Options
@@ -151,3 +152,4 @@ This error typically occurs because Git is using a different GPG executable than
 * `git cm` : `commit -m`
 * `git unstage` : `reset HEAD --`
 * `git last` : `log -1 HEAD`
+* `git cl` : `clone`
